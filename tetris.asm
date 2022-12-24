@@ -60,7 +60,7 @@ SDSCORE		EQU	1		; + score each row that was soft-dropped
 ; 
 CPM		EQU 	1		; Set to 0 for building without CPM.
 					; Will load to address 0 and HLT on exit
-ALTSHAPECHARS	SET	0		; If set to 1, then use all
+ALTSHAPECHARS	EQU	0		; If set to 1, then use all
 					; hashes for the tetromino chars
 
 	;; START OF CODE ;;
@@ -1533,7 +1533,7 @@ t2:
 	db	' XX '
 	db	' X  '
 	db	'    '
-t3L		
+t3:		
 	db	'    '
 	db	'XXX '
 	db	' X  '
