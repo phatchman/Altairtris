@@ -58,16 +58,17 @@ SDSCORE		EQU	1		; + score each row that was soft-dropped
 ;
 ; BUILD OPTIONS
 ; 
-ALTSHAPECHARS	SET	0		; If set to one, then use all
+CPM		EQU 	1		; Set to 0 for building without CPM.
+					; Will load to address 0 and HLT on exit
+ALTSHAPECHARS	SET	0		; If set to 1, then use all
 					; hashes for the tetromino chars
-CPM		SET	1		; Set to FALSE to load directly to
-					; Altair, without CPM
 
-	IF 	CPM=1
-	org	100h			; Start at 100h for CPM
+	;; START OF CODE ;;
+	IF 	CPM
+	org	100h			
 	ENDIF
-	IF 	CPM=0
-	org	000h			; Start at 0 for direct Altair
+	IF	CPM-1			; Logic done this way to be compatible 
+	org	000h			; with CPM ASM and the ASL assembler
 	ENDIF
 	
 	lxi	h,invis			; set cursor invisible
@@ -171,10 +172,10 @@ done:	call	inflush			; flush out incoming serial chars
 	call	outstr
 	lxi	h,clr
 	call	outstr
-	IF CPM=1
+	IF CPM
 	ret				; return to CPM on quit
 	ENDIF
-	IF CPM=0
+	IF CPM - 1
 	hlt				; halt on quit
 	ENDIF
 
@@ -1435,7 +1436,7 @@ shaptbl:			; pointer the first orientation of each shape
 	dw	tshape, ishape, oshape
 
 	; Tetromino definitions for each orientation
-	IF ALTSHAPECHARS=0
+	IF ALTSHAPECHARS - 1	
 zshape:		
 z1:		
 	db	'##  '
@@ -1585,7 +1586,7 @@ o4:
 	db	'    '
 	db	'    '
 	ENDIF
-	IF ALTSHAPECHARS=1
+	IF ALTSHAPECHARS 
 zshape:		
 z1:		
 	db	'##  '
@@ -1682,7 +1683,7 @@ t2:
 	db	' ## '
 	db	' #  '
 	db	'    '
-t3L		
+t3:
 	db	'    '
 	db	'### '
 	db	' #  '
