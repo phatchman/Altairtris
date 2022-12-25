@@ -9,7 +9,7 @@ Serial port speed should be at least 9600bps. On the Altairduino, speeds above 3
 
 1. TETRIS.COM - CPM Version
 2. TETRIS.HEX - Version to be loaded directly to the Altair. Does not rely on CPM
-3. TETRISB.COM - CPM VErsion, but uses the # character for every shape
+3. TETRISB.COM - CPM Version, but uses the # character for every shape
 4. TETRISB.HEX - Non-CPM version that uses # character for evey shape
 
 ## Build Options
