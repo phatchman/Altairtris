@@ -485,7 +485,7 @@ lsdon:
 ;	1. Get the shape number
 ;	2. Get the orientation
 ;	3. Get the "pixel" which collided
-;	4. For !shape5, kick based on orientation
+;	4. For not shape5, kick based on orientation
 ;       5. For shape 5, use the kick table to determine which way to kick
 ;       Shapes can be moved up to 2 chars in any direction
 kickshape:
