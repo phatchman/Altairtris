@@ -28,7 +28,7 @@
 ; Serial Port Configuration
 ;  - Currently only works on SIO-2
 ;  - SIO doesn't just use different status bits, 
-;    the status logic is also inverted compared to SIO
+;    the status logic is also inverted compared to SIO-2
 SIOSTAT		EQU	16		; status port
 SIODATA		EQU	17		; data port
 SIOREADY	EQU	2		; output ready mask
@@ -36,18 +36,19 @@ SIOAVAIL	EQU	1		; input avail mask
 
 ; ARENA (Playing Field) Definition
 ARENAW		EQU	10		; Arena is 10 blocks wide
-ARENADN		EQU	(ARENAW+5)	; Arena width+4 side chars+1 null char
+ARENADN		EQU	(ARENAW+5)	; Offset to move down one row in arena
+					; Arena width+4 side chars+1 null char
 ARENAH		EQU	20		; Arena is 20 blocks high
 ARENALST	EQU	(ARENADN*(ARENAH-1) + 2)
 					; offset to first col of last arena line
 ARENAY		EQU	02		; Row offset for drawing arena
-MINUSARENAY	EQU	0FEh		; Negative of ARENAY. The CPM Complier 
+MINUSARENAY	EQU	0FEh		; Negative of ARENAY. The CPM assembler 
 					; doesn't like -ARENAY for ADI
 ARENAYX		EQU	0200h		; Top / left arena draw location
 SPAWNYX		EQU	0206h		; default spawn on row 2, col 6
 					; except for I shape, which is col 5
 ; Make these speed values higher if you want a bigger challenge
-; However, the speed gets fats pretty quickly as it is, so suggest to leave them
+; However, the speed gets fast pretty quickly as it is, so suggest to leave them
 SPEEDINIT	EQU	0		; initial speed
 SPEEDINC	EQU	1		; The value to increment speed each time
 					; a shape is locked in place
@@ -94,6 +95,7 @@ nwgame:	lxi	h,clr			; clear screen
 	call	displayscore		; Show score, draw arena
 	call	drawarena		; and display help
 	call 	displaycontrols
+
 	; Wait for "S - START or Q - QUIT" keys
 wait4s:	
 	lxi	h,seed1			; increment random seed1 for 
@@ -173,9 +175,9 @@ overlp:	call	inch			; wait for new key press
 	call	cleararena		; blank out arena
 	jmp	nwgame			; start new game
 done:	call	inflush			; flush out incoming serial chars
-	lxi	h,vis	
+	lxi	h,vis			; Make the cursor visible again
 	call	outstr
-	lxi	h,clr
+	lxi	h,clr			; Clear the screen
 	call	outstr
 	IF CPM
 	lhld	stacko			; restore the CPM stack
@@ -449,7 +451,7 @@ lsskip: dcr	b		; decrement column counter
 	jz	lsspd		; if no more rows to check, then done
 	; move to next line of arena
 	mov	a,c		; save the value of the row counter in A
-	lxi	b,ARENADN-3	; move to next arena line minus the 4 shape columns
+	lxi	b,ARENADN-3	; move to next arena line minus the 4 shape cols
 				; + 1 to increment to next character
 	dad	b		; change HL to next arena row
 	mvi	b,4		; reset the col counter
@@ -474,17 +476,18 @@ lsdon:
 ;             of the shape causes a collision. Called if rotcw detects a 
 ;             collision.
 ; Note: This function does not restore old x/y values on a failed kick. 
-; 	The calling routing must store them before calling.
+; 	The calling routine must store them before calling.
 ;       Nor does it check if the new position still causes a collision.
-;	The calling routing must do a collision check and deny the rotation
+;	The calling routine must do a collision check and deny the rotation
 ;	if there is still a collision after the "kick"
-; Note: This should never be called for shape 6 as it can't collide because 
-;       of a rotation. Kick on shape 6 is undefined.
+; Note: This should never be called for shape 6 as it can't collide when 
+;       rotating. Kick on shape 6 is undefined.
 ;	1. Get the shape number
 ;	2. Get the orientation
 ;	3. Get the "pixel" which collided
-;       4. Index into the kick table to determine which way to move the shape
-;       The shape can be moved up to 2 chars in any direction
+;	4. For !shape5, kick based on orientation
+;       5. For shape 5, use the kick table to determine which way to kick
+;       Shapes can be moved up to 2 chars in any direction
 kickshape:
 	lda	shapno			; the type of kick depends on the shape
 	; For shape 0-4, the kick is determined by the orientation
@@ -574,8 +577,8 @@ rlnxt:	sta	shapo			; save the new orientation
 	; Kick may change the current x/y so save them
 	lhld	shapx			; load the current shape x,y
 	shld	tmpptr			; and save
-	call	kickshape		; try and kick the shape into a non-colliding position
-	call	setarenaptr
+	call	kickshape		; try and kick the shape into a 
+	call	setarenaptr		; non-colliding position
 	call	collischeck		; Does it still collide after kick?
 	jnc	rldraw			; if still no collision, then draw kicked version
 	lda	tmp			; no kicks work, so restore old orientation
@@ -583,13 +586,14 @@ rlnxt:	sta	shapo			; save the new orientation
 	lhld	tmpptr			; restore the old x,y
 	shld	shapx			
 	call	prepshape
-	call	setarenaptr		; if the shape was kicked, reset the position in arena
+	call	setarenaptr		; if the shape was kicked, reset the 
+					; position in arena
 rldraw:	call	drawshape		; redraw the shape
 	ret
 ;
 ; moveleft - Move the shape 1 char to the left
 movleft:
-	call	eraseshape		; TODO: could just erase right side of shape
+	call	eraseshape		; OPT: could erase right col of shape 
 	lxi	h,shapx			; decrease shape's x position
 	dcr	m
 	call	setarenaptr		; update position in arena
@@ -605,7 +609,7 @@ mlclsn:	ret
 ;
 ; moveright - Move the shape one character to the right
 movright:
-	call 	eraseshape		; OPT: could just erase left of shape
+	call 	eraseshape		; OPT: could erase left col of shape
 	lxi	h,shapx			; increase shape's x position
 	inr	m
 	call	setarenaptr		; recalc arena position
@@ -876,8 +880,8 @@ crdone:
 ; rowsrc is used as pointer to source row to copy from
 ; rowdst is used as pointer to dest row to copy to
 ; Starts at the last arena row.
-; If that row is '-' then keep dst row the saw, 
-;  	decrement src row to prev line and don't copy anything.
+; If that row is '-' then keep dst row the same, 
+;  	move src row one line up and don't copy anything.
 ; Otherwise check if we're previously found a '-' row.
 ;	If we have then copy from src to dst
 ;	If not then move src and dst up one row.
@@ -898,14 +902,14 @@ drcmp:	mvi	a,'-'
 	inr	m
 	jmp	drdecs		; until find a non-'-' row
 drnxt:	lda	nrclr		; check if we have already found cleared lines
-	ora	a		; if nrclr > 0 then we have and need to copy src to dst
-	jz	drdecd		; otherwise skip the copy and dec src and dst pointers
+	ora	a		; if nrclr > 0 then need to copy src to dst
+	jz	drdecd		; otherwise skip the copy and dec src and dst 
 	call	copyrow	
 drdecd:	lxi	d,-ARENADN	; move src and dst back one row each
 	lhld	rowdst
 	dad	d		; position at first char 1 line up
 	shld	rowdst		
-drdecs:	lxi	d,-ARENADN	; need to set this again in cause just dec'ing src
+drdecs:	lxi	d,-ARENADN	; need to set this again in case only decing src
 	lhld	rowsrc
 	dad	d
 	shld	rowsrc		; LH now set to the first char of the next row
@@ -1043,7 +1047,7 @@ outstr:	in 	SIOSTAT	; read serial status
 	mov	a,m		; get char to output
 	cpi	0
 	jz	osret		; done if 0 terminator
-	out	SIODATA	; output char
+	out	SIODATA		; output char
 	inx	h		; move to next char
 	jmp	outstr
 osret:	ret
@@ -1056,16 +1060,16 @@ outch:	in 	SIOSTAT	; read serial status
 	ani	SIOREADY	; is ready to send character (bit 1 set)?
 	jz	outch		; try again if not ready
 	mov	a,b		; restore the char to output
-	out	SIODATA	; output char
+	out	SIODATA		; output char
 	ret
 
 ;
 ; inch - Read a char from serial.
 ; Returns: A = 0 if no char. A = ch if char
-inch:	in	SIOSTAT	; read serial status
+inch:	in	SIOSTAT		; read serial status
 	ani	SIOAVAIL	; is there an input char? (bit 0 set)
 	jz	noch
-	in	SIODATA	; get the char
+	in	SIODATA		; get the char
 noch:	ret			; A will be 0 if no char
 
 ;
@@ -1151,7 +1155,7 @@ dcdone:	ret
 ;;;;;;;;;;;;;;;;;;;;;;;
 
 ;
-; Calcscore - calculate the score from line clears
+; calcscore - calculate the score from line clears
 ; INPUTS:     A = nr cleared lines
 calcscore:
 	lxi	h,scrtbl-2	; index into score table to find how much to add
@@ -1395,7 +1399,7 @@ updscr:	db	0		; should the score be updated?
 ; vt100 codes
 clr:	db	27,'[2J',0	; clear screen
 invis:	db	27,'[?25l',0	; invisible cursor
-vis:	db	27,'[?25h',0	; visible curose
+vis:	db	27,'[?25h',0	; visible cursor
 csr:	db	27,'[ll;ccH',0	; move cursor to line,col
 fwd:	db	27,'[1C',0	; move 1 char forward
 bw4:	db	27,'[4D',0	; move back 4 characters
@@ -1408,18 +1412,18 @@ hx2dec:	db	'01','02','03','04','05','06'
 	db	'13','14','15','16','17','18'
 	db	'19','20','21','22','23','24'
 	; scores in bcd
-	; a full hard drop = ~ 40 points if 2 pointss per row
+	; a full hard drop = ~ 40 points if 2 points per row
 scrtbl:	db	02h,00h		; 200 points for 1 line clear
 	db	05h,00h		; 500 points for a 2 line clear +300
 	db	09h,00h		; 900 points for a 3 line clear +400
 	db	14h,00h		; 1400 points for a 4 line clear +500
-; Kick tables for kickshape subrouting when moving shape 5 (I shape)
+; Kick tables for kickshape subroutine when moving shape 5 (I shape)
 ; As and example if collision is on col 0 in
 ; orientation 2, then move right 2
 ; In this case I shape is against left wall, 1 away from or on right wall
 ; Note: Collision is calculated from right-side of shape and is 1 based, 
 ; so tables are backward to what you would normally expect
-; Note: CPM doesn't allow -ve values in db 255=-1, 254=-2
+; Note: CPM doesn't allow -ve values in db. Using 255=-1, 254=-2 instead
 kick1:	db	0,255,254,0,1	; kicks for orientation 0 and 1
 kick2:	db	0,255,0,1,2	; kicks for orientation 2 and 3
 
