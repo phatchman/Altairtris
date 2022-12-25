@@ -70,7 +70,12 @@ ALTSHAPECHARS	EQU	0		; If set to 1, then use all
 	IF	CPM-1			; Logic done this way to be compatible 
 	org	000h			; with CPM ASM and the ASL assembler
 	ENDIF
-	
+	; Set up stack
+	lxi	h,0
+	dad	sp			; get current stack
+	shld	stacko			; save as original stack
+	lxi	sp,stack		; set new stack
+
 	lxi	h,invis			; set cursor invisible
 	call 	outstr
 	
@@ -173,6 +178,8 @@ done:	call	inflush			; flush out incoming serial chars
 	lxi	h,clr
 	call	outstr
 	IF CPM
+	lhld	stacko			; restore the CPM stack
+	sphl
 	ret				; return to CPM on quit
 	ENDIF
 	IF CPM - 1
@@ -1784,4 +1791,9 @@ controls:
 	db	'S - START',0
 	db	'Q - QUIT',0
 	db	0
+
+; LOCAL STACK 
+	ds	32			; 16 level stack
+stack:
+stacko:	dw	0			; original CPM stack
 	end
