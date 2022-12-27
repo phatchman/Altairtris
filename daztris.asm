@@ -60,7 +60,7 @@ SDSCORE		EQU	1		; + score each row that was soft-dropped
 
 ; DAZZLER
 VIDEO           EQU     1400h           ; VRAM location
-
+NRCLRS		EQU	11		; Nr of colour table entries (clrtbl)
 ;
 ; BUILD OPTIONS
 ; 
@@ -84,6 +84,24 @@ ALTSHAPECHARS	EQU	0		; If set to 1, then use all
 
         call    dazinit
 
+;	lxi	d,0
+	;call	csrpos
+	;lxi	h,clrstr
+	;call	outstr
+	;lxi	d,0100h
+	;call	csrpos
+	;lxi	h,clrstr
+	;call	outstr
+
+;	lxi	d,0200h
+;	call	csrpos
+;	lxi	h,clrst2
+;	call	outstr
+;	lxi	d,0300h
+;	call	csrpos
+;	lxi	h,clrst2
+;	call	outstr
+;	ret
 
 	lxi	h,invis			; set cursor invisible
 	call 	outstrsio
@@ -811,7 +829,6 @@ sacol:	lda 	shapx		; load shape x position
 ;
 ; drawarena - Draw the current arena on screen
 ;
-
 drawarena:
 	lxi	d,ARENAYX	; Set cursor to arena display pos d = y, e = x
 	call	csrpos
@@ -821,8 +838,7 @@ drawarena:
 daloop:	call	outstr		; output the current arena line
 	lda	tmp
 	inr	a
-        ; TODO: Work out the +1 or not to +1?????
-	cpi	ARENAH+ARENAY+1	; have we drawn all the lines? ARENA height + y 
+	cpi	ARENAH+ARENAY+2	; have we drawn all the lines? ARENA height + y 
 				; screen offset
 	jz	dadone		; if so, done?
 	sta	tmp		; store current line nr to tmp
@@ -1176,47 +1192,23 @@ ocdone: pop     h
 ; convert2daz - Convert a character to a coloured pixel.
 ;               returns same value in top/bottom nibble. Calling 
 ;               function needs to determine the correct nibble to store
-;Z	#	10011001	99
-;S	*	10101010	AA
-;L	@	10111011	BB
-;J	+	11001100	CC
-;T	X	11011101	DD
-;I	H	11101110	EE
-;O	O	11111111	FF
-
-
 convert2daz:
-        cpi     ' '             ; if space, then blank
-        jnz     c2dt1
-        mvi     a,0
-        ret
-c2dt1:  cpi     '#'
-        jnz     c2dt2
-        mvi     a,099h
-        ret
-c2dt2:  cpi     '*'
-        jnz     c2dt3
-        mvi     a,0AAh
-        ret
-c2dt3:  cpi     '@'
-        jnz     c2dt4
-        mvi     a,0BBh
-        ret
-c2dt4:  cpi     '+'
-        jnz     c2dt5
-        mvi     a,0CCh
-        ret
-c2dt5:  cpi     'X'
-        jnz     c2dt6
-        mvi     a,0DDh
-c2dt6:  cpi     'H'
-        jnz     c2dt7
-        mvi     a,0EEh
-c2dt7:  cpi     'O'
-        jnz     c2dt8
-        mvi     a,0FFh
-        ret
-c2dt8:  mvi     a,077h            ; otherwise return white (for now)
+	push	h
+	push	b
+	mvi	c,NRCLRS	; 16 colours in table
+	lxi	h,clrtbl	; HL = pointer to colour lookup table
+c2dfnd:	mov	b,m		; format of table is ascii char, colour
+	cmp	b		; is this the right char?
+	jz	c2dok		
+	dcr	c
+	jz	c2dok		; colour 16 is the "default colour"
+	inx	h		; move to next table character		
+	inx	h
+	jmp	c2dfnd		; find next char
+c2dok:	inx	h		; get the colour from the table
+	mov	a,m		; and replace A with the colour
+	pop	b		; restore saved registers
+	pop	h
         ret
 
 ;
@@ -1673,7 +1665,27 @@ rowdst:	dw	0		; destination row for droprows
 vrptr   dw      0               ; "cursor" position into VRAM
 vrmask: ds      0fh             ; bottom nibble is first pixel
 
-shaptbl:			; pointer the first orientation of each shape
+; DAZZLER Colour table for converting ascii chars to colours
+;Shape	Char	ASCII		IRGB	Binary	Hex		
+;Z	#	35		1001	10011001	99		35,099h
+;S	*	42		1010	10101010	AA		42,0AAh
+;L	@	64		1011	10111011	BB		64,0BBh
+;J	+	43		1100	11001100	CC		43,0CCh
+;T	X	88		1101	11011101	DD		88,0DDh
+;I	H	72		1110	11101110	EE		72,0EEh
+;O	O	79		0001	00010001	11		79,011h
+;N/A	<spc>	60		0111	01110111	77		60,077h
+;N/A	-	45		0111	01110111	77		45,077h
+;N/A	S	83		0010	00100010	22		83,022h
+;deflt	$	36		1111	11111111	FF		36,0FFh
+
+;clrstr:	db	'##**@@++XXHHOO',0
+;clrst2:	db	39,39,'..DD//\\\\LLSS',0
+clrtbl:	db	35,099h,42,0AAh,64,0BBh,43,0CCh
+	db	88,0DDh,72,0EEh,79,011h,32,077h
+	db	45,077h,83,022h,36,0FFh
+
+shaptbl:	; pointer the first orientation of each shape
 	dw	zshape, sshape, lshape, jshape
 	dw	tshape, ishape, oshape
 
