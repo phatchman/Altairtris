@@ -765,8 +765,8 @@ daloop:	call	outstr		; output the current arena line
 				; screen offset
 	jz	dadone		; if so, done?
 	sta	tmp		; store current line nr to tmp
-	inx	h		; relies on outstr leaving HL are the string 
-				; null char
+	inx	h		; relies on outstr leaving HL at the string 
+				; null char on return
 	mov	d,a		; set row to current screen row
 	mvi	e,0		; set col to 0
 	push	h		; save string position
@@ -1053,7 +1053,7 @@ outstr:	in 	SIOSTAT	; read serial status
 osret:	ret
 
 ;
-; Output string to serial port
+; Output a signle character to serial port
 ; B: char to be output
 ;
 outch:	in 	SIOSTAT	; read serial status
