@@ -25,6 +25,17 @@
 ;; SOFTWARE.
 ;;
 
+; BUILD OPTIONS
+; Note the IF x - 1 syntax for the conditional assembly.
+; This format is used to have code compile under both unix (asl assembler)
+; and CPM as they use different conditional logic.
+CPM		EQU 	1		; Set to 0 for building without CPM.
+					; Will load to address 0 and HLT on exit
+ALTSHAPECHARS	EQU	0		; If set to 1, then use all
+					; hashes for the tetromino chars
+DAZZLER		EQU	0		; Set to 1 for dazzler support
+DEBUG		EQU	0		; Includes some debug/helper routines
+
 ; Serial Port Configuration
 ;  - Currently only works on SIO-2
 ;  - SIO doesn't just use different status bits, 
@@ -41,12 +52,31 @@ ARENADN		EQU	(ARENAW+5)	; Offset to move down one row in arena
 ARENAH		EQU	20		; Arena is 20 blocks high
 ARENALST	EQU	(ARENADN*(ARENAH-1) + 2)
 					; offset to first col of last arena line
-ARENAY		EQU	02		; Row offset for drawing arena
+	IF	DAZZLER-1
+ARENAY		EQU	2		; Top / left arena draw location
+ARENAX		EQU	0		; in screen co-ordinates
+	; Make sure to change these if ARENAX or ARENAY are changed
 MINUSARENAY	EQU	0FEh		; Negative of ARENAY. The CPM assembler 
 					; doesn't like -ARENAY for ADI
-ARENAYX		EQU	0200h		; Top / left arena draw location
-SPAWNYX		EQU	0206h		; default spawn on row 2, col 6
+MINUSARENAX	EQU	000h		; Negative of ARENAX
+SPAWNYX		EQU	0206h		; Spawn on row 2, col 6
 					; except for I shape, which is col 5
+
+	ENDIF
+	IF	DAZZLER
+ARENAY		EQU	6		; Top / left arena draw location
+ARENAX		EQU	9
+	; Make sure to change these if ARENAX or ARENAY are changed
+MINUSARENAY	EQU	0FAh		; Negative of ARENAY. The CPM assembler 
+					; doesn't like -ARENAY for ADI
+MINUSARENAX	EQU	0F7h		; Negative of ARENAX
+SPAWNYX		EQU	060Fh		; Spawn on row 6, column 15
+					; except for I shape, which is col 14
+	; DAZZLER-specific
+VIDEO           EQU     1400h           ; VRAM location (1400h = 5k)
+NRCLRS		EQU	12		; Nr of colour table entries (clrtbl)
+	ENDIF
+
 ; Make these speed values higher if you want a bigger challenge
 ; However, the speed gets fast pretty quickly as it is, so suggest to leave them
 SPEEDINIT	EQU	0		; initial speed
@@ -57,12 +87,21 @@ HDSCORE		EQU	2		; + score each row that was hard-dropped
 SDSCORE		EQU	1		; + score each row that was soft-dropped
 
 ;
-; BUILD OPTIONS
-; 
-CPM		EQU 	1		; Set to 0 for building without CPM.
-					; Will load to address 0 and HLT on exit
-ALTSHAPECHARS	EQU	0		; If set to 1, then use all
-					; hashes for the tetromino chars
+; About DAZZLER Support
+;
+; Uses the 512k vram, 32x32 pixel, colour mode.
+; It is implemented by converting the ascii output of the SIO version into 
+; coloured pixels to be written to the DAZZLER vram. Each character that would
+; normally be output to the SIO is mapped to a colour and stored in the vram.
+; The cursor movement outputs are stored as pointers into the associated VRAM 
+; address.
+; While this is not the most efficient way create a tetris for the DAZZLER,
+; it does provide a relatively simple way to use the same source code for
+; the SIO and DAZZLER versions, with only minor conditional assembly
+;
+; Output the should still go to the serial port, outstrsio and outchsio 
+; subroutines. These also work as normal serial output in the SIO version.
+;
 
 	;; START OF CODE ;;
 	IF 	CPM
@@ -77,16 +116,22 @@ ALTSHAPECHARS	EQU	0		; If set to 1, then use all
 	shld	stacko			; save as original stack
 	lxi	sp,stack		; set new stack
 
-	lxi	h,invis			; set cursor invisible
-	call 	outstr
-	
-nwgame:	lxi	h,clr			; clear screen
-	call	outstr
 
+	lxi	h,invis			; set cursor invisible
+	call 	outstrsio
+
+	IF	DAZZLER
+        call    dazinit
+	ENDIF
+
+nwgame:	lxi	h,clr			; clear screen
+	call	outstrsio
+	IF	DAZZLER - 1		; Only output in the SIO version
 	lxi	d,0000h
-	call	csrpos			; Set cursor to 0,0
+	call	csrpossio		; Set cursor to 0,0
 	lxi	h,scrstr		; Print "SCORE"
-	call	outstr
+	call	outstrsio
+	ENDIF
 	mvi	a,0
 	sta	score			; reset score
 	sta	score+1
@@ -160,9 +205,9 @@ lock:	; lock the current piece in place on the arena
 over:	; Game is over
 	lhld	anyyx			; display "PRESS ANY KEY"
 	xchg
-	call	csrpos			; DE = screen pos to display
+	call	csrpossio		; DE = screen pos to display
 	lxi	h,anystr
-	call	outstr
+	call	outstrsio
 	mvi	a,SPEEDINIT		; reset speed
 	sta	speed
 	call	delay			; delay slightly so user can read the
@@ -176,9 +221,9 @@ overlp:	call	inch			; wait for new key press
 	jmp	nwgame			; start new game
 done:	call	inflush			; flush out incoming serial chars
 	lxi	h,vis			; Make the cursor visible again
-	call	outstr
+	call	outstrsio
 	lxi	h,clr			; Clear the screen
-	call	outstr
+	call	outstrsio
 	IF CPM
 	lhld	stacko			; restore the CPM stack
 	sphl
@@ -187,6 +232,7 @@ done:	call	inflush			; flush out incoming serial chars
 	IF CPM - 1
 	hlt				; halt on quit
 	ENDIF
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -345,15 +391,34 @@ dl4:	mov	b,a		;
 	; Would only need 1 vt100 escape sequence instead of the current 2
 	push 	h		; save the shape pointer
 	push	d		; and arena pointer
-	lxi	h,dwn		; go down 1 line
-	call 	outstr
-	lxi	h,bw4		; and back 4 characters
-	call 	outstr
+        call    csrdownback     ; set cursor to start of shape on next line
 	pop	d		; and arena pointer
 	pop	h		; restore shape pointer
 
 	ret
 
+        IF      DAZZLER-1
+;
+; Move cursor down 1 line and back 4 chars
+;
+csrdownback:
+	lxi	h,dwn		; go down 1 line
+	call 	outstr
+	lxi	h,bw4		; and back 4 characters
+	call 	outstr
+        ret
+        ENDIF
+	IF	DAZZLER
+;
+; Move cursor down 1 line and back 4 chars
+; Dazzler version
+csrdownback:
+        lhld    vrptr           ; load vram pointer into HL
+        lxi     d,16-2          ; move pointer to next line - 4 chars
+        dad     d               ; (2 chars per byte = -2)
+        shld    vrptr
+        ret
+	ENDIF
 
 ; erasehape - Erase the currently drawn shape
 ;
@@ -378,6 +443,7 @@ eraseshape:
 	call	eraseline	; erase current line
 
 	ret
+
 ; eraseshapetop - Erase the top line of the currently drawn shape
 ;                 This is a slight optimisation for when the shape moves down
 ;                 Only the top row needs to be blanked as the rest of the shape
@@ -393,7 +459,6 @@ eraseshapetop:
 	call	eraseline	; erase current line
 	ret
 
-	
 ;
 ; eraseline - Erase the current shape line
 ; INPUTS:     HL = pointer to arena line to erase
@@ -414,10 +479,7 @@ eraseline:
 	call 	outch
 
 	push 	h		; move to the next line
-	lxi	h,dwn		; OPT: this isn't needed for the last line
-	call 	outstr
-	lxi	h,bw4
-	call	outstr
+        call    csrdownback     ; OPT: this isn't needed for the last line
 	pop	h
 
 	ret
@@ -602,7 +664,6 @@ movleft:
 	lxi	h,shapx			; otherwise move back to original pos
 	inr	m
 	call	setarenaptr		; reset arena position
-;	jmp	mlclsn			; no need to redraw if collision
 mlnocl:	call	drawshape
 mlclsn:	ret
 
@@ -741,6 +802,7 @@ sarow:	jz	sacol		; have we finished processing the row position?
 	jmp	sarow		; keep adding until find correct row
 	; find the column in the arena that maches the shape x position
 sacol:	lda 	shapx		; load shape x position
+	adi	MINUSARENAX	; convert screen co-ords to arena co-ords.
 	mov	c,a		; and store in C. B will already be 0
 	dad	b		; add the column offset.
 	; HL will now contain a pointer to the top-left char in the arena
@@ -751,9 +813,10 @@ sacol:	lda 	shapx		; load shape x position
 
 ;
 ; drawarena - Draw the current arena on screen
-;	      
+;
 drawarena:
-	lxi	d,ARENAYX	; Set cursor to arena display pos d = y, e = x
+	mvi	d,ARENAY
+	mvi	e,ARENAX	; Set cursor to arena display pos d = y, e = x
 	call	csrpos
 	mov	a,d		; a = top left col of arena (ARENAY)
 	sta	tmp		; store current row nr in tmp
@@ -761,27 +824,26 @@ drawarena:
 daloop:	call	outstr		; output the current arena line
 	lda	tmp
 	inr	a
-	cpi	ARENAH+ARENAY+1	; have we drawn all the lines? ARENA height + y 
+	cpi	ARENAH+ARENAY+2	; have we drawn all the lines? ARENA height + y 
 				; screen offset
 	jz	dadone		; if so, done?
 	sta	tmp		; store current line nr to tmp
-	inx	h		; relies on outstr leaving HL at the string 
-				; null char on return
+	inx	h		; relies on outstr leaving HL are the string 
+				; null char
 	mov	d,a		; set row to current screen row
-	mvi	e,0		; set col to 0
+	mvi	e,ARENAX	; set col to ARENAX 
 	push	h		; save string position
 	call	csrpos		; move to next line
 	pop	h		; restore string position
 	jmp	daloop
 dadone:	ret
-
 ;
 ; drawarenaline - draw a single line of the arena 
 ; INPUTS: HL = pointer to start of line to draw
 ; 	  D = arena row number to draw
 ; Note: Converts arena co-ords to screen co-ords
 drawarenaline:
-	mvi	e,0		; E = column 0, D already contains row
+	mvi	e,ARENAX	; E = column (ARENAX), D already contains row
 	mov	a,d
 	adi	ARENAY		; add the arena screen top position
 	mov	d,a		; to convert to screen co-ords
@@ -1041,28 +1103,145 @@ dlwait:	inr	b		; inner wait loop
 ; Output string to serial port
 ; HL: zero-terminated string to be output
 ;
-outstr:	in 	SIOSTAT	; read serial status
+	IF      DAZZLER-1
+outstr:				
+	ENDIF	
+outstrsio:			; outstrsio used in DAZZLER verions to output
+				; to SIO, rather than DAZZLER vram
+	in 	SIOSTAT		; read serial status
 	ani	SIOREADY	; is ready to send character?
-	jz	outstr		; try again if not ready
+	jz	outstrsio	; try again if not ready
 	mov	a,m		; get char to output
 	cpi	0
-	jz	osret		; done if 0 terminator
+	jz	ossret		; done if 0 terminator
 	out	SIODATA		; output char
 	inx	h		; move to next char
-	jmp	outstr
-osret:	ret
+	jmp	outstrsio
+ossret:	ret
+
+	IF	DAZZLER
+; outstr - Output pixels to the vram.
+; This converts the serial port characters to coloured pixels on the dazzler.
+; It doesn't output text
+; Doesn't handle wrapping to next line.
+; TODO: does this need to preserve anything?
+outstr:
+        xchg                    ; DE = ptr to output string
+        lhld    vrptr           ; load pointer to vram into HL
+osloop: ldax    d               ; get the char to output
+        ora     a               ; set Z flag
+        jz      osdone          ; If null then done.
+        call    convert2daz     ; convert the character to dazzler
+        mov     b,a             ; save to b (not this has char stored in both nibbles)
+        lda     vrmask
+        cpi     0fh             ; bottom nibble?
+        jnz     ostop
+        ana     b               ; get bottom nibble
+        mov     b,a             ; save
+        mvi     a,0f0h          ; swap nibble mask
+        sta     vrmask
+        ana     m               ; get top nibble from vram
+        ora     b               ; merge with top nibble of new pixel
+        mov     m,a             ; and save to vram
+        inx     d               
+        jmp     osloop          ; next char
+ostop:  ana     b               ; same as above, but for other nibble
+        mov     b,a
+        mvi     a,0fh
+        sta     vrmask
+        ana     m
+        ora     b
+        mov     m,a             ; top nibble is 2nd pixel. 
+        inx     h               ; so need to increment to vramptr.
+        inx     d
+        jmp     osloop
+osdone: shld    vrptr           ; save current vram ptr.
+        xchg                    ; outstr needs to return HL to end of string
+        ret
 
 ;
-; Output a signle character to serial port
+; convert2daz - Convert a character to a coloured pixel.
+;		clrtbl variable contains the mappings between chracters and
+;		colours.
+;		If the mapping between the input character and colour is 
+;               not found, use a default value (last colour in clrtbl)
+; INPUTS:  A - Character to convert
+; OUTPUTS: A - DAZZLER pixel colour 
+;               returns same value in top/bottom nibble. Calling 
+;               function needs to determine the correct nibble to use
+convert2daz:
+	push	h
+	push	b
+	mvi	c,NRCLRS	; C = nr colours to search for in the table
+	lxi	h,clrtbl	; HL = pointer to colour lookup table
+c2dfnd:	mov	b,m		; format of table is ascii char, colour
+	cmp	b		; is this the right char?
+	jz	c2dok		
+	dcr	c
+	jz	c2dok		; colour 16 is the "default colour"
+	inx	h		; move to next table character		
+	inx	h
+	jmp	c2dfnd		; find next char
+c2dok:	inx	h		; get the colour from the table
+	mov	a,m		; and replace A with the colour
+	pop	b		; restore saved registers
+	pop	h
+        ret
+	ENDIF
+
+;
+; Output single character to serial port
 ; B: char to be output
 ;
-outch:	in 	SIOSTAT	; read serial status
+	IF	DAZZLER - 1
+outch:
+	ENDIF
+outchsio:			; Used in DAZZLER version to output to SIO
+	in 	SIOSTAT		; read serial status
 	ani	SIOREADY	; is ready to send character (bit 1 set)?
-	jz	outch		; try again if not ready
+	jz	outchsio	; try again if not ready
 	mov	a,b		; restore the char to output
 	out	SIODATA		; output char
 	ret
 
+	IF	DAZZLER
+;
+; Output single pixel to dazzler
+; B: char to be output
+; Note does not wrap to next line
+;
+outch:	push    h               ; need to save HL to be compatibile 
+				; with serial version
+        lhld    vrptr           ; load pointer to vram into HL
+ocloop: mov     a,b             
+        call    convert2daz     ; convert the character to dazzler
+				; note top and bottom nibble contain converted
+				; character
+        mov     b,a             ; save to b
+        lda     vrmask
+        cpi     0fh             ; bottom nibble?
+        jnz     octop
+        ana     b               ; get bottom nibble
+        mov     b,a             ; save
+        mvi     a,0f0h          ; swap nibble mask
+        sta     vrmask
+        ana     m               ; get top nibble from vram
+        ora     b               ; merge with top nibble of new pixel
+        mov     m,a             ; and save to vram
+        jmp     ocdone          ; done
+octop:  ana     b               ; same as above, but for other nibble
+        mov     b,a
+        mvi     a,0fh
+        sta     vrmask
+        ana     m
+        ora     b
+        mov     m,a             ; top nibble is 2nd pixel. 
+        inx     h               ; so need to increment to vramptr.
+        shld    vrptr           ; save current vram ptr.
+        ; fallthrough
+ocdone: pop     h               
+        ret
+	ENDIF
 ;
 ; inch - Read a char from serial.
 ; Returns: A = 0 if no char. A = ch if char
@@ -1084,6 +1263,7 @@ inflush:
 ifdone:	ret
 
 
+
 ;
 ; csrpos - Set cursor to position in D, E (row, col)
 ; Note: current only supports a 24x24 screen
@@ -1094,7 +1274,13 @@ ifdone:	ret
 ; The converted value is written to the relevant row/col parts of the 'csr' 
 ; string variable before being output on the serial port to position the cursor
 ;
-csrpos:	xra	a		; zero a, clear carry
+
+        IF      DAZZLER-1
+csrpos:
+	ENDIF
+csrpossio:			; Used by DAZZLER version to set vt100 
+				; cursor position, instead of DAZZLER vram pos
+	xra	a		; zero a, clear carry
 	; first translate the row to ascii value
 	; via hx2dec translation table
 	mov	b,a		; zero b as we are only adding 8 bits
@@ -1125,30 +1311,66 @@ csrpos:	xra	a		; zero a, clear carry
 	mov	m,c		; save 2nd char of col
 	; now output the formatted csr move string
 	lxi 	h,csr		; load the cursor position command
-	call	outstr		; and output it 
+	call	outstrsio	; and output it 
 	ret
 
+	IF 	DAZZLER
+;
+; csrpos - Set cursor to position in D, E (row, col)
+; Note: current only supports a 24x24 screen
+;	D,E of 0,0 is output as 1,1 as screen home is 1,1
+;
+; Save pointer to VRAM that equals the equivalent vt100 cursor position
+; Needs to preserve D to be compatible with serial version
+csrpos:
+        push    d
+        lxi     h,vram
+        lxi     b,16            ; move down 16 bytes for each row 
+        inr     d               ; inc/dec to set the Z flag
+cposy:  dcr     d
+        jz      cposx           ; Add 16 for each row
+        dad     b
+        jmp     cposy           ; until done
+cposx:  mov     a,e             ; A = X position
+        ora     a               ; reset carry
+        rar                     ; each vram byte contains 2 pixels. Divide x by 2
+                                ; carry will contain the bottom bit, which indicates
+                                ; whether top or bottom nibble is used for the current pixel
+                                ; bottom nibble is pixel 0, top nibble is pixel 1
+        jc     cptop            ; If there was carry from the RRC, then we are 
+        mov     c,a             ; B will already be 0
+        dad     b               ; add X/2
+                                ; on top half of the vram byte (odd pixel)
+        mvi     a,0fh          	; set mask to bottom nibble
+        jmp     cpdone
+cptop:  mov     c,a             ; B will already be 0  
+        dad     b               ; add X/2
+	mvi     a,0f0h          ; set mask to top nibble
+cpdone: sta     vrmask          ; store mask
+        shld    vrptr           ; save pointer to vram location for cursor pos
+        pop     d
+        ret
+	ENDIF
 ;
 ; displaycontrols - Display control help before game
 ;
 displaycontrols:
 	lhld	ctrlxy			; position to display game controls
 	xchg				; D = Y pos ; E = x pos
-	call	csrpos			; move cursor
+	call	csrpossio		; move cursor
 	lxi	h,controls
 dcloop:	xra	a			; A = 0
 	cmp	m			; if null string, then end
 	jz	dcdone
-	call	outstr			; output first line. DE preserved
+	call	outstrsio		; output first line. DE preserved
 	inr	d			; move y down one line
 	push	h
-	call	csrpos
+	call	csrpossio
 	pop	h
 	inx	h			; H will be on the prev string null char
 					; this moves HL to next string
 	jmp	dcloop
 dcdone:	ret
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;
 ;; Score Subroutines ;;
@@ -1220,11 +1442,12 @@ addscore:
 
 ;
 ; displayscore - Display the current score
-;
+; SIO version
+	IF 	DAZZLER-1
 displayscore:
 	lhld	scoryx
 	xchg
-	call	csrpos
+	call	csrpossio
 	lxi	h,score+2		; load first digits of score
 	mvi	c,3			; score is 3 bcd bytes
 dsnxt:	mov	a,m
@@ -1235,16 +1458,105 @@ dsnxt:	mov	a,m
 	rrc
 	adi	'0'			; convert to ascii
 	mov	b,a
-	call	outch			; print it
+	call	outchsio		; print it
 	mov	a,m
 	ani	0fh			; get lower nibble
 	adi	'0'			; convert to ascii
 	mov	b,a			; outch uses reg B
-	call	outch
+	call	outchsio
 	dcx	h			; move to next score byte
 	dcr	c
 	jnz	dsnxt
 	ret
+	ENDIF
+	IF	DAZZLER
+;
+; displayscore - Display the current score on DAZZLER
+;
+displayscore:
+	lxi	d,0002h		; first score char top/left
+	lxi	h,score+2
+	mov	a,m
+	ani	0f0h		; get first digit of score
+	rrc			; move high nibble to low nibble
+	rrc			
+	rrc
+	rrc
+	call	dspscoredigit	; display
+
+	; 2nd digit
+	lxi	d,0007h		; 2nd score digit top left
+	lxi	h,score+2
+	mov	a,m
+	ani	0fh		; get bottom nibble
+	call	dspscoredigit
+
+	; 3rd digit
+	lxi	d,000Ch		
+	lxi	h,score+1	; next bcd byte
+	mov	a,m
+	ani	0f0h		
+	rrc			
+	rrc			
+	rrc
+	rrc
+	call	dspscoredigit	
+
+	; 4th digit
+	lxi	d,0011h		
+	lxi	h,score+1	
+	mov	a,m
+	ani	0fh		
+	call	dspscoredigit
+
+	; 5th digit
+	lxi	d,0016h		
+	lxi	h,score		; next bcd byte
+	mov	a,m
+	ani	0f0h		
+	rrc			
+	rrc			
+	rrc
+	rrc
+	call	dspscoredigit	
+
+	; 6th digit
+	lxi	d,001Bh		
+	lxi	h,score
+	mov	a,m
+	ani	0fh		
+	call	dspscoredigit
+
+	ret
+
+
+; dspscoredigit - display a digit of the score on the DAZZLER
+; INPUTS - DE row,col to display at
+;        - Score digit to display
+dspscoredigit:
+	lxi	h,scr0		; init pointer to digit '0'
+	lxi	b,4*5		; BC = num bytes in a score digit
+	ora	a		; Set Z flag
+dsdadd:	jz	dsdrw		; once found correct digit, draw it
+	dad	b
+	dcr	a
+	jmp 	dsdadd		; get offset to next digit
+dsdrw:	mvi	c,5		; 5 lines in each digit
+dsdlp:	push	b		; save row counter
+	push	h		; save digit pointer
+	call	csrpos		; position cursor to DE
+	pop	h		; restore digit pointer
+	push	d		; store cursor pos
+	call	outstr		
+	pop	d		; restore cursor pos
+	pop	b		; restore row counter
+	dcr	c		; decrement row counter
+	jz	dsddne
+	inx	h		; get next score char
+	inr	d		; move cursor to next line
+	jmp	dsdlp		; draw next line
+dsddne:	ret			; digit drawn
+	ENDIF
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utility Subroutines ;;
@@ -1299,8 +1611,58 @@ random:
 	shld	seed2
 	ret
 
+	IF	DAZZLER
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; DAZZLER Subroutines ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; vram is laid out from top-left to bottom right.
+; Each pixel is contained in 4 bits, with the format
+; 3 = Intensity, 2 = Red, 1 = Greem, 0 = Blue 
+; Bits 0-4 are for the first pixel and 5-7 are for the second pixel.
+;
+; The variable vrptr is used to keep track of where the current "cursor" pos
+; with the variable vrmask, telling us whether the cursor points to the
+; top or bottom nibble of the byte pointed to by vrptr.
+;
+; This provides a simple way to treat the DAZZLER vram like it is a vt100 
+; terminal. 
+; The clrtbl variable is used to map characters that would normally be output to
+; the serial/vt100 to different colours.
 
+; dazinit - Initialise the DAZZLER 
+;         - Init to 32x32 (512k)
+dazinit:
+	call    clrvideo        ; Clear dazzler video ram
+	mvi     a,000010000b    ; Normal Res, colour mode
+	out     17o
+	mvi     a,VIDEO / 512   ; Set video ram location
+				; VIDEO >> 9 (/512 used for asm compatibility)
+	ori     80h             ; Set dazzler to "on"
+	out     16o             ; out to dazzler control reg
+        lxi     h,vram
+        shld    vrptr           ; init vram pointer to start of vram
+        mvi     a,0fh           ; set mask to bottom nibble (first pixel)
+        sta     vrmask
+        ret
+
+;
+; clrvideo - Clear 2 x 256 bytes = 512 bytes of video ram
+;
+clrvideo:
+	xra     a               ; a = 0
+	lxi     h,vram
+	lxi     b,2             ; B = 0 ; C = 2
+cvloop: mov     m,a             ; clear byte
+	inx     h               ; next byte
+	inr     b
+	jnz     cvloop          ; clear 1x256 bytes
+	dcr     c
+	jnz     cvloop          ; Repeat 
+	ret
+	ENDIF
+
+	IF	DEBUG
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Unused Debug / Helper Routines ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1310,10 +1672,8 @@ drawall:
 	call	drawarena
 	mvi	a,0
 	sta	shapno
-	mvi	a,2
-	sta	shapy
-	mvi	a,5
-	sta 	shapx
+        lxi     h,SPAWNYX
+        shld    shapx
 	call	setarenaptr	; set pointer to current shape location in arena
 draloop:
 	call 	prepshape
@@ -1382,6 +1742,7 @@ rloop:
 	mvi	b,' '
 	call 	outch
 	jmp	rloop
+	ENDIF
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ;; START OF VARIABLES ;;
@@ -1401,7 +1762,6 @@ clr:	db	27,'[2J',0	; clear screen
 invis:	db	27,'[?25l',0	; invisible cursor
 vis:	db	27,'[?25h',0	; visible cursor
 csr:	db	27,'[ll;ccH',0	; move cursor to line,col
-fwd:	db	27,'[1C',0	; move 1 char forward
 bw4:	db	27,'[4D',0	; move back 4 characters
 dwn:	db	27,'[1B',0	; move down 1 line
 	; lookup table for cursor positioning (csr)
@@ -1442,14 +1802,15 @@ araptr: dw	0		; pointer to the top left arena position
 nrclr:	db	0		; number of full rows cleared this turn
 rowsrc:	dw	0		; source row for droprows
 rowdst:	dw	0		; destination row for droprows
-shaptbl:			; pointer the first orientation of each shape
+
+shaptbl:	; pointer the first orientation of each shape
 	dw	zshape, sshape, lshape, jshape
 	dw	tshape, ishape, oshape
 
 	; Tetromino definitions for each orientation
 	IF ALTSHAPECHARS - 1	
 zshape:		
-z1:		
+z1:
 	db	'##  '
 	db	' ## '
 	db	'    '
@@ -1772,7 +2133,7 @@ arena:	db	' |          | ',0
 	db	' |          | ',0
 	db	' |          | ',0
 	db	' |          | ',0
-	db	' +==========+ ',0
+	db	' [==========] ',0
 	db	'              ',0	; shape can extend 1 below the arena
 ;
 ; Display game controls at start of game
@@ -1796,8 +2157,99 @@ controls:
 	db	'Q - QUIT',0
 	db	0
 
+	IF	DAZZLER
+; DAZZLER Variables
+vrptr   dw      0               ; "cursor" position into VRAM
+vrmask: ds      0fh             ; bottom nibble is first pixel
+
+; DAZZLER Colour table for converting ascii chars to colours
+;Shape	Char	ASCII		IRGB	Binary	Hex		
+;Z	#	35		1001	10011001	99		35,099h
+;S	*	42		1010	10101010	AA		42,0AAh
+;L	@	64		1011	10111011	BB		64,0BBh
+;J	+	43		1100	11001100	CC		43,0CCh
+;T	X	88		1101	11011101	DD		88,0DDh
+;I	H	72		1110	11101110	EE		72,0EEh
+;O	O	79		0001	00010001	11		79,011h
+;N/A	<spc>	60		0111	01110111	77		60,077h
+;N/A	-	45		0111	01110111	77		45,077h
+;N/A	S	83		0010	00100010	22		83,022h
+;deflt	$	36		1111	11111111	FF		36,0FFh
+; NOTE: Change NRCLRS if adding / removing from the colour table
+clrtbl:	db	35,099h,42,0AAh,64,0BBh,43,0CCh
+	db	88,0DDh,72,0EEh,79,011h,32,077h
+	db	45,077h,83,022h,120,000h,36,0FFh
+
+	; Score characters - S = foureground colour, x = background colour
+scr0:		
+	db	'SSS',0
+	db	'SxS',0
+	db	'SxS',0
+	db	'SxS',0
+	db	'SSS',0
+scr1:		
+	db	'xSx',0
+	db	'xSx',0
+	db	'xSx',0
+	db	'xSx',0
+	db	'xSx',0
+scr2:		
+	db	'SSS',0
+	db	'xxS',0
+	db	'SSS',0
+	db	'Sxx',0
+	db	'SSS',0
+scr3:		
+	db	'SSS',0
+	db	'xxS',0
+	db	'SSS',0
+	db	'xxS',0
+	db	'SSS',0
+scr4:		
+	db	'SxS',0
+	db	'SxS',0
+	db	'SSS',0
+	db	'xxS',0
+	db	'xxS',0
+scr5:		
+	db	'SSS',0
+	db	'Sxx',0
+	db	'SSS',0
+	db	'xxS',0
+	db	'SSS',0
+scr6:		
+	db	'SSS',0
+	db	'Sxx',0
+	db	'SSS',0
+	db	'SxS',0
+	db	'SSS',0
+scr7:		
+	db	'SSS',0
+	db	'xxS',0
+	db	'xxS',0
+	db	'xxS',0
+	db	'xxS',0
+scr8:		
+	db	'SSS',0
+	db	'SxS',0
+	db	'SSS',0
+	db	'SxS',0
+	db	'SSS',0
+scr9:		
+	db	'SSS',0
+	db	'SxS',0
+	db	'SSS',0
+	db	'xxS',0
+	db	'SSS',0
+	ENDIF
+
 ; LOCAL STACK 
 	ds	32			; 16 level stack
 stack:
 stacko:	dw	0			; original CPM stack
+	IF	DAZZLER
+	; DAZZLER video ram
+	org     VIDEO
+vram:   ds      512
+	ENDIF
 	end
