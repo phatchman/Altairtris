@@ -27,7 +27,7 @@
 
 ; BUILD OPTIONS
 ; Note the IF x - 1 syntax for the conditional assembly.
-; This format is used to have code compile under both unix (asl assembler)
+; This format is used to have code compile under both linuxa:load  (asl assembler)
 ; and CPM as they use different conditional logic.
 CPM		EQU 	1		; Set to 0 for building without CPM.
 					; Will load to address 0 and HLT on exit
