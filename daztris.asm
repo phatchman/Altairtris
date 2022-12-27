@@ -51,7 +51,7 @@ MINUSARENAX	EQU	0F7h
 ;ARENAYX		EQU	0200h		; Top / left arena draw location
 ARENAY		EQU	6
 ARENAX		EQU	9
-SPAWNYX		EQU	060Eh		; 6,15
+SPAWNYX		EQU	060Fh		; 6,15
 ;SPAWNYX		EQU	0206h		; default spawn on row 2, col 6
 					; except for I shape, which is col 5
 ; Make these speed values higher if you want a bigger challenge
