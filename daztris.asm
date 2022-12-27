@@ -41,13 +41,18 @@ ARENADN		EQU	(ARENAW+5)	; Offset to move down one row in arena
 ARENAH		EQU	20		; Arena is 20 blocks high
 ARENALST	EQU	(ARENADN*(ARENAH-1) + 2)
 					; offset to first col of last arena line
-ARENAY		EQU	02		; Row offset for drawing arena
-MINUSARENAY	EQU	0FEh		; Negative of ARENAY. The CPM assembler 
+;ARENAY		EQU	02		; Row offset for drawing arena
+;MINUSARENAY	EQU	0FEh		; Negative of ARENAY. The CPM assembler 
 					; doesn't like -ARENAY for ADI
-ARENAYX		EQU	0200h		; Top / left arena draw location
+MINUSARENAY	EQU	0FAh		; Negative of ARENAY. The CPM assembler 
+					; doesn't like -ARENAY for ADI
+
+MINUSARENAX	EQU	0F7h
+;ARENAYX		EQU	0200h		; Top / left arena draw location
+ARENAY		EQU	6
+ARENAX		EQU	9
+SPAWNYX		EQU	060Eh		; 6,15
 ;SPAWNYX		EQU	0206h		; default spawn on row 2, col 6
-; TODO Confirm spawn locations
-SPAWNYX		EQU	0206h		; default spawn on row 2, col 6
 					; except for I shape, which is col 5
 ; Make these speed values higher if you want a bigger challenge
 ; However, the speed gets fast pretty quickly as it is, so suggest to leave them
@@ -60,7 +65,7 @@ SDSCORE		EQU	1		; + score each row that was soft-dropped
 
 ; DAZZLER
 VIDEO           EQU     1400h           ; VRAM location
-NRCLRS		EQU	11		; Nr of colour table entries (clrtbl)
+NRCLRS		EQU	12		; Nr of colour table entries (clrtbl)
 ;
 ; BUILD OPTIONS
 ; 
@@ -105,15 +110,18 @@ ALTSHAPECHARS	EQU	0		; If set to 1, then use all
 
 	lxi	h,invis			; set cursor invisible
 	call 	outstrsio
-	
-nwgame:	lxi	h,clr			; clear screen
-	call	outstrsio
 
+	IF	0
 	lxi	d,0000h
 	call	csrpossio		; Set cursor to 0,0
 	; TODO: only need to display score once.
 	lxi	h,scrstr		; Print "SCORE"
 	call	outstrsio
+	ENDIF
+
+nwgame:	lxi	h,clr			; clear screen
+	call	outstrsio
+
 	mvi	a,0
 	sta	score			; reset score
 	sta	score+1
@@ -818,6 +826,7 @@ sarow:	jz	sacol		; have we finished processing the row position?
 	jmp	sarow		; keep adding until find correct row
 	; find the column in the arena that maches the shape x position
 sacol:	lda 	shapx		; load shape x position
+	adi	MINUSARENAX	; convert screen co-ords to arena co-ords.
 	mov	c,a		; and store in C. B will already be 0
 	dad	b		; add the column offset.
 	; HL will now contain a pointer to the top-left char in the arena
@@ -830,7 +839,9 @@ sacol:	lda 	shapx		; load shape x position
 ; drawarena - Draw the current arena on screen
 ;
 drawarena:
-	lxi	d,ARENAYX	; Set cursor to arena display pos d = y, e = x
+	mvi	d,ARENAY
+	mvi	e,ARENAX	; Set cursor to arena display pos d = y, e = x
+;	lxi	d,ARENAYX	; Set cursor to arena display pos d = y, e = x
 	call	csrpos
 	mov	a,d		; a = top left col of arena (ARENAY)
 	sta	tmp		; store current row nr in tmp
@@ -845,7 +856,7 @@ daloop:	call	outstr		; output the current arena line
 	inx	h		; relies on outstr leaving HL are the string 
 				; null char
 	mov	d,a		; set row to current screen row
-	mvi	e,0		; set col to 0
+	mvi	e,ARENAX	; set col to ARENAX 
 	push	h		; save string position
 	call	csrpos		; move to next line
 	pop	h		; restore string position
@@ -857,7 +868,7 @@ dadone:	ret
 ; 	  D = arena row number to draw
 ; Note: Converts arena co-ords to screen co-ords
 drawarenaline:
-	mvi	e,0		; E = column 0, D already contains row
+	mvi	e,ARENAX	; E = column (ARENAX), D already contains row
 	mov	a,d
 	adi	ARENAY		; add the arena screen top position
 	mov	d,a		; to convert to screen co-ords
@@ -1439,9 +1450,98 @@ addscore:
 	inr	m		
 	ret
 
+	IF	1
+;
+; displayscore - Display the current score on DAZZLER
+;
+displayscore:
+	lxi	d,0002h		; first score char top/left
+	lxi	h,score+2
+	mov	a,m
+	ani	0f0h		; get first digit of score
+	rrc			; move high nibble to low nibble
+	rrc			
+	rrc
+	rrc
+	call	dspscoredigit	; display
+
+	; 2nd digit
+	lxi	d,0007h		; 2nd score digit top left
+	lxi	h,score+2
+	mov	a,m
+	ani	0fh		; get bottom nibble
+	call	dspscoredigit
+
+	; 3rd digit
+	lxi	d,000Ch		
+	lxi	h,score+1	; next bcd byte
+	mov	a,m
+	ani	0f0h		
+	rrc			
+	rrc			
+	rrc
+	rrc
+	call	dspscoredigit	
+
+	; 4th digit
+	lxi	d,0011h		
+	lxi	h,score+1	
+	mov	a,m
+	ani	0fh		
+	call	dspscoredigit
+
+	; 5th digit
+	lxi	d,0016h		
+	lxi	h,score		; next bcd byte
+	mov	a,m
+	ani	0f0h		
+	rrc			
+	rrc			
+	rrc
+	rrc
+	call	dspscoredigit	
+
+	; 6th digit
+	lxi	d,001Bh		
+	lxi	h,score
+	mov	a,m
+	ani	0fh		
+	call	dspscoredigit
+
+	ret
+
+
+; dspscoredigit - display a digit of the score on the DAZZLER
+; INPUTS - DE row,col to display at
+;        - Score digit to display
+dspscoredigit:
+	lxi	h,scr0		; init pointer to digit '0'
+	lxi	b,4*5		; BC = num bytes in a score digit
+	ora	a		; Set Z flag
+dsdadd:	jz	dsdrw		; once found correct digit, draw it
+	dad	b
+	dcr	a
+	jmp 	dsdadd		; get offset to next digit
+dsdrw:	mvi	c,5		; 5 lines in each digit
+dsdlp:	push	b		; save row counter
+	push	h		; save digit pointer
+	call	csrpos		; position cursor to DE
+	pop	h		; restore digit pointer
+	push	d		; store cursor pos
+	call	outstr		
+	pop	d		; restore cursor pos
+	pop	b		; restore row counter
+	dcr	c		; decrement row counter
+	jz	dsddne
+	inx	h		; get next score char
+	inr	d		; move cursor to next line
+	jmp	dsdlp		; draw next line
+dsddne:	ret			; digit drawn
+	ENDIF
 ;
 ; displayscore - Display the current score
 ;
+	IF 0
 displayscore:
 	lhld	scoryx
 	xchg
@@ -1466,6 +1566,7 @@ dsnxt:	mov	a,m
 	dcr	c
 	jnz	dsnxt
 	ret
+	ENDIF
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utility Subroutines ;;
@@ -1661,29 +1762,7 @@ araptr: dw	0		; pointer to the top left arena position
 nrclr:	db	0		; number of full rows cleared this turn
 rowsrc:	dw	0		; source row for droprows
 rowdst:	dw	0		; destination row for droprows
-; DAZZLER Variables
-vrptr   dw      0               ; "cursor" position into VRAM
-vrmask: ds      0fh             ; bottom nibble is first pixel
 
-; DAZZLER Colour table for converting ascii chars to colours
-;Shape	Char	ASCII		IRGB	Binary	Hex		
-;Z	#	35		1001	10011001	99		35,099h
-;S	*	42		1010	10101010	AA		42,0AAh
-;L	@	64		1011	10111011	BB		64,0BBh
-;J	+	43		1100	11001100	CC		43,0CCh
-;T	X	88		1101	11011101	DD		88,0DDh
-;I	H	72		1110	11101110	EE		72,0EEh
-;O	O	79		0001	00010001	11		79,011h
-;N/A	<spc>	60		0111	01110111	77		60,077h
-;N/A	-	45		0111	01110111	77		45,077h
-;N/A	S	83		0010	00100010	22		83,022h
-;deflt	$	36		1111	11111111	FF		36,0FFh
-
-;clrstr:	db	'##**@@++XXHHOO',0
-;clrst2:	db	39,39,'..DD//\\\\LLSS',0
-clrtbl:	db	35,099h,42,0AAh,64,0BBh,43,0CCh
-	db	88,0DDh,72,0EEh,79,011h,32,077h
-	db	45,077h,83,022h,36,0FFh
 
 shaptbl:	; pointer the first orientation of each shape
 	dw	zshape, sshape, lshape, jshape
@@ -2038,6 +2117,90 @@ controls:
 	db	'S - START',0
 	db	'Q - QUIT',0
 	db	0
+
+; DAZZLER Variables
+vrptr   dw      0               ; "cursor" position into VRAM
+vrmask: ds      0fh             ; bottom nibble is first pixel
+
+; DAZZLER Colour table for converting ascii chars to colours
+;Shape	Char	ASCII		IRGB	Binary	Hex		
+;Z	#	35		1001	10011001	99		35,099h
+;S	*	42		1010	10101010	AA		42,0AAh
+;L	@	64		1011	10111011	BB		64,0BBh
+;J	+	43		1100	11001100	CC		43,0CCh
+;T	X	88		1101	11011101	DD		88,0DDh
+;I	H	72		1110	11101110	EE		72,0EEh
+;O	O	79		0001	00010001	11		79,011h
+;N/A	<spc>	60		0111	01110111	77		60,077h
+;N/A	-	45		0111	01110111	77		45,077h
+;N/A	S	83		0010	00100010	22		83,022h
+;deflt	$	36		1111	11111111	FF		36,0FFh
+; NOTE: Change NRCLRS if adding / removing from the colour table
+clrtbl:	db	35,099h,42,0AAh,64,0BBh,43,0CCh
+	db	88,0DDh,72,0EEh,79,011h,32,077h
+	db	45,077h,83,022h,120,000h,36,0FFh
+
+scr0:		
+	db	'SSS',0
+	db	'SxS',0
+	db	'SxS',0
+	db	'SxS',0
+	db	'SSS',0
+scr1:		
+	db	'xSx',0
+	db	'xSx',0
+	db	'xSx',0
+	db	'xSx',0
+	db	'xSx',0
+scr2:		
+	db	'SSS',0
+	db	'xxS',0
+	db	'SSS',0
+	db	'Sxx',0
+	db	'SSS',0
+scr3:		
+	db	'SSS',0
+	db	'xxS',0
+	db	'SSS',0
+	db	'xxS',0
+	db	'SSS',0
+scr4:		
+	db	'SxS',0
+	db	'SxS',0
+	db	'SSS',0
+	db	'xxS',0
+	db	'xxS',0
+scr5:		
+	db	'SSS',0
+	db	'Sxx',0
+	db	'SSS',0
+	db	'xxS',0
+	db	'SSS',0
+scr6:		
+	db	'SSS',0
+	db	'Sxx',0
+	db	'SSS',0
+	db	'SxS',0
+	db	'SSS',0
+scr7:		
+	db	'SSS',0
+	db	'xxS',0
+	db	'xxS',0
+	db	'xxS',0
+	db	'xxS',0
+scr8:		
+	db	'SSS',0
+	db	'SxS',0
+	db	'SSS',0
+	db	'SxS',0
+	db	'SSS',0
+scr9:		
+	db	'SSS',0
+	db	'SxS',0
+	db	'SSS',0
+	db	'xxS',0
+	db	'SSS',0
+
 
 ; LOCAL STACK 
 	ds	32			; 16 level stack
