@@ -27,3 +27,9 @@ Was developed using the ASL macro assembler http://john.ccac.rwth-aachen.de:8000
 But it can also be built using the CPM ASM assembler (tested using CPM v 2.2)
 
 This is my first attempt at writing something in 8080 assembler for the Altair, so I welcome any feedback on how good or bad my code is.
+
+## Screenshots
+
+Serial/VT100                  | DAZZLER
+:-------------------------:|:-------------------------:
+![SIO-2/VT100](https://github.com/phatchman/Altairtris/blob/main/img/tetris_sio.png?raw=true)  |  ![DAZZLER](https://github.com/phatchman/Altairtris/blob/main/img/tetris_dazzler.png?raw=true)
