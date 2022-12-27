@@ -8,8 +8,6 @@ so pick a serial port speed within that range.
 You might like to try the new DAZZLER version. It's only been tested under an emulator, so please let me know if it works for you.
 I guess I should really go and build the dazzler add-in card now that I've made some software for it.
 
-The dazzler
-
 ## Executable Files
 
 1. TETRIS.COM - CPM Version
