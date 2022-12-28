@@ -99,8 +99,8 @@ SDSCORE		EQU	1		; + score each row that was soft-dropped
 ; it does provide a relatively simple way to use the same source code for
 ; the SIO and DAZZLER versions, with only minor conditional assembly
 ;
-; Output the should still go to the serial port, outstrsio and outchsio 
-; subroutines. These also work as normal serial output in the SIO version.
+; Output the should still go to the serial port must use the outstrsio and 
+; outchsio subroutines. 
 ;
 
 	;; START OF CODE ;;
@@ -2164,23 +2164,24 @@ vrmask: ds      0fh             ; bottom nibble is first pixel
 
 ; DAZZLER Colour table for converting ascii chars to colours
 ;Shape	Char	ASCII		IRGB	Binary	Hex		
-;Z	#	35		1001	10011001	99		35,099h
-;S	*	42		1010	10101010	AA		42,0AAh
-;L	@	64		1011	10111011	BB		64,0BBh
-;J	+	43		1100	11001100	CC		43,0CCh
-;T	X	88		1101	11011101	DD		88,0DDh
-;I	H	72		1110	11101110	EE		72,0EEh
-;O	O	79		0001	00010001	11		79,011h
-;N/A	<spc>	60		0111	01110111	77		60,077h
-;N/A	-	45		0111	01110111	77		45,077h
-;N/A	S	83		0010	00100010	22		83,022h
-;deflt	$	36		1111	11111111	FF		36,0FFh
+;Z	#	35		1001	10011001	99
+;S	*	42		1010	10101010	AA
+;L	@	64		1011	10111011	BB
+;J	+	43		1100	11001100	CC
+;T	X	88		1101	11011101	DD
+;I	H	72		1110	11101110	EE
+;O	O	79		0001	00010001	11
+;<spc>	 	32		0111	01110111	77
+;N/A	-	45		0111	01110111	77
+;N/A	S	83		0010	00100010	22
+;N/A	x	120		0000	00000000	00h
+;deflt	$	36		1111	11111111	FF
 ; NOTE: Change NRCLRS if adding / removing from the colour table
 clrtbl:	db	35,099h,42,0AAh,64,0BBh,43,0CCh
 	db	88,0DDh,72,0EEh,79,011h,32,077h
 	db	45,077h,83,022h,120,000h,36,0FFh
 
-	; Score characters - S = foureground colour, x = background colour
+	; Score characters - S = foreground colour, x = background colour
 scr0:		
 	db	'SSS',0
 	db	'SxS',0
