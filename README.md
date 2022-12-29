@@ -10,11 +10,12 @@ I guess I should really go and build the dazzler add-in card now that I've made 
 
 ## Executable Files
 
-1. TETRIS.COM - CPM Version
-2. TETRIS.HEX - Version to be loaded directly to the Altair. Does not rely on CPM
-3. TETRISB.COM - CPM Version, but uses the # character for every shape
-4. TETRISB.HEX - Non-CPM version that uses # character for every shape
+1. TETRIS.COM - CPM Version text version. Get this one if you are unsure and run it under CPM.
+2. TETRIS.HEX - Non-CPM version to be loaded directly to the Altair.
+3. TETRISB.COM - CPM Version, but uses the # character for every shape.
+4. TETRISB.HEX - Non-CPM version that uses # character for every shape.
 5. TETRISDZ.COM - CPM Version for the Cromemco DAZZLER graphics card. 
+6. TETRISDZ.HEX - Non-CPM Dazzler version.
 
 ## Build Options
 1. SET CPM = 1 to build for CPM
