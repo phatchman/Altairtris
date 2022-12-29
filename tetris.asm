@@ -33,7 +33,7 @@ CPM		EQU 	1		; Set to 0 for building without CPM.
 					; Will load to address 0 and HLT on exit
 ALTSHAPECHARS	EQU	0		; If set to 1, then use all
 					; hashes for the tetromino chars
-DAZZLER		EQU	0		; Set to 1 for dazzler support
+DAZZLER		EQU	1		; Set to 1 for dazzler support
 DEBUG		EQU	0		; Includes some debug/helper routines
 
 ; Serial Port Configuration
@@ -224,6 +224,9 @@ done:	call	inflush			; flush out incoming serial chars
 	call	outstrsio
 	lxi	h,clr			; Clear the screen
 	call	outstrsio
+	IF	DAZZLER
+	call	dazclose
+	ENDIF
 	IF CPM
 	lhld	stacko			; restore the CPM stack
 	sphl
@@ -1646,6 +1649,10 @@ dazinit:
         sta     vrmask
         ret
 
+dazclose:
+	xra 	a		; A = 0
+	out	16o		; turn off the dazzler
+	ret
 ;
 ; clrvideo - Clear 2 x 256 bytes = 512 bytes of video ram
 ;
