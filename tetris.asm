@@ -1534,8 +1534,8 @@ displayscore:
 
 
 ; dspscoredigit - display a digit of the score on the DAZZLER
-; INPUTS - DE row,col to display at
-;        - Score digit to display
+; INPUTS: DE - row,col to display at
+;         A - Score digit to display
 dspscoredigit:
 	lxi	h,scr0		; init pointer to digit '0'
 	lxi	b,4*5		; BC = num bytes in a score digit
@@ -1785,19 +1785,20 @@ scrtbl:	db	02h,00h		; 200 points for 1 line clear
 	db	09h,00h		; 900 points for a 3 line clear +400
 	db	14h,00h		; 1400 points for a 4 line clear +500
 ; Kick tables for kickshape subroutine when moving shape 5 (I shape)
-; As and example if collision is on col 0 in
+; As an example if collision is on col 0 in
 ; orientation 2, then move right 2
 ; In this case I shape is against left wall, 1 away from or on right wall
 ; Note: Collision is calculated from right-side of shape and is 1 based, 
-; so tables are backward to what you would normally expect
+; so tables are backward to what you would expect
 ; Note: CPM doesn't allow -ve values in db. Using 255=-1, 254=-2 instead
 kick1:	db	0,255,254,0,1	; kicks for orientation 0 and 1
 kick2:	db	0,255,0,1,2	; kicks for orientation 2 and 3
 
 shape:	dw	zshape		; pointer to current shape to draw
 shapno:	db	0		; the number of the shape to draw
-; shapx and shapy are relative to the top of the arena, not screen
-; they can be loaded as a 16 bit pair, so shapx 
+; shapx and shapy are screen co-ordinates. They need to be converted to arena
+; co-ordinates when comparing against arena shapes. (eg for collision detection)
+; They can be loaded as a 16 bit pair, so shapx 
 ; must be located immediately before shapy
 shapx:	db	0		; x position of the shape
 shapy:	db	0		; y position of the shape
