@@ -25,18 +25,18 @@ SHAPEX		EQU	ARENAX+6
 loop:   jmp     loop
 
 ;
-; Clear 8 x 256 bytes = 2k of video ram
+; Clear 2 x 256 bytes = 512B of video ram
 ;
 clrvideo:
 	xra     a               ; a = 0
 	lxi     h,vram
-	lxi     b,8             ; B = 0 ; C = 8
+	lxi     b,3             ; B = 0 ; C = 3
 cvloop: mov     m,a             ; clear byte
 	inx     h               ; next byte
 	inr     b
 	jnz     cvloop          ; clear 1x256 bytes
 	dcr     c
-	jnz     cvloop          ; Repeat 8 times
+	jnz     cvloop          ; Repeat 
 	ret
 
 drawshape:
