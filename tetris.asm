@@ -283,7 +283,7 @@ psnx:	shld	shape		; shape HL to shape
 ;		2. Set shape pointer to that shape in orientation 0
 ;		3. Spawn at origin for that shape.
 ;		4, Draw the shape
-;		Note: that shapx and shapy are relative to arena top-left
+;		Note: that shapx and shapy are relative to screen top-left
 ; 		0 = Z ; 1 = S ; 2 = L ; 3 = J
 ; 		4 = T ; 5 = I ; 6 = O
 spawnshape:
