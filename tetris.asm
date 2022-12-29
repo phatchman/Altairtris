@@ -26,7 +26,7 @@
 ;;
 
 ; BUILD OPTIONS
-; Note the IF x - 1 syntax (mean NOT x) for the conditional assembly.
+; Note the IF x - 1 syntax (means NOT x) for the conditional assembly.
 ; This format is used to have code compile under both linux (asl assembler)
 ; and CPM as they use different conditional logic.
 CPM		EQU 	1		; Set to 0 for building without CPM.
