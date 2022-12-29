@@ -33,7 +33,7 @@ CPM		EQU 	1		; Set to 0 for building without CPM.
 					; Will load to address 0 and HLT on exit
 ALTSHAPECHARS	EQU	0		; If set to 1, then use all
 					; hashes for the tetromino chars
-DAZZLER		EQU	1		; Set to 1 for dazzler support
+DAZZLER		EQU	0		; Set to 1 for dazzler support
 DEBUG		EQU	0		; Includes some debug/helper routines
 
 ; Serial Port Configuration
