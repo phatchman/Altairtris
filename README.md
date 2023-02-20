@@ -6,7 +6,7 @@ Serial port speed should be at least 9600bps. On the Altairduino, speeds above 3
 so pick a serial port speed within that range.
 
 You might like to try the new DAZZLER version. It's only been tested under an emulator, so please let me know if it works for you.
-~~I guess I should really go and build the dazzler add-in card now that I've made some software for it.~~
+~~I guess I should really go and build the dazzler add-in card now that I've made some software for it.~~<br>
 I've created firmware for the Raspberry Pi Pico that can act as a low-cost Dazzler card for the Altair 8800 Simulator / Altair-Duino. 
 See the [Pico Dazzler](https://github.com/phatchman/pico_dazzler) for more information.
 
